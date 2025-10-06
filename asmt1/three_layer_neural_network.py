@@ -74,7 +74,7 @@ class NeuralNetwork(object):
         :return: activations
         '''
 
-        # YOU IMPLMENT YOUR actFun HERE
+        # TODO 1.b.1: YOU IMPLMENT YOUR actFun HERE
 
         return None
 
@@ -86,7 +86,7 @@ class NeuralNetwork(object):
         :return: the derivatives of the activation functions wrt the net input
         '''
 
-        # YOU IMPLEMENT YOUR diff_actFun HERE
+        # TODO 1.b.3: YOU IMPLEMENT YOUR diff_actFun HERE
 
         return None
 
@@ -99,7 +99,7 @@ class NeuralNetwork(object):
         :return:
         '''
 
-        # YOU IMPLEMENT YOUR feedforward HERE
+        # TODO: 1.c.1 YOU IMPLEMENT YOUR feedforward HERE
 
         # self.z1 =
         # self.a1 =
@@ -119,7 +119,7 @@ class NeuralNetwork(object):
         self.feedforward(X, lambda x: self.actFun(x, type=self.actFun_type))
         # Calculating the loss
 
-        # YOU IMPLEMENT YOUR CALCULATION OF THE LOSS HERE
+        # TODO: 1.c.2 YOU IMPLEMENT YOUR CALCULATION OF THE LOSS HERE
 
         # data_loss =
 
@@ -144,7 +144,7 @@ class NeuralNetwork(object):
         :return: dL/dW1, dL/b1, dL/dW2, dL/db2
         '''
 
-        # IMPLEMENT YOUR BACKPROP HERE
+        # TODO: 1.d.2 IMPLEMENT YOUR BACKPROP HERE
         num_examples = len(X)
         delta3 = self.probs
         delta3[range(num_examples), y] -= 1
@@ -196,9 +196,9 @@ class NeuralNetwork(object):
 
 def main():
     # # generate and visualize Make-Moons dataset
-    # X, y = generate_data()
-    # plt.scatter(X[:, 0], X[:, 1], s=40, c=y, cmap=plt.cm.Spectral)
-    # plt.show()
+    X, y = generate_data()
+    plt.scatter(X[:, 0], X[:, 1], s=40, c=y, cmap=plt.cm.Spectral)
+    plt.show()
 
     # model = NeuralNetwork(nn_input_dim=2, nn_hidden_dim=3 , nn_output_dim=2, actFun_type='tanh')
     # model.fit_model(X,y)
