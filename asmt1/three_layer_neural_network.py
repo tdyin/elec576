@@ -36,7 +36,7 @@ def plot_decision_boundary(pred_func, X, y):
 
 ########################################################################################################################
 ########################################################################################################################
-# YOUR ASSSIGMENT STARTS HERE
+# YOUR ASSIGMENT STARTS HERE
 # FOLLOW THE INSTRUCTION BELOW TO BUILD AND TRAIN A 3-LAYER NEURAL NETWORK
 ########################################################################################################################
 ########################################################################################################################
@@ -74,7 +74,15 @@ class NeuralNetwork(object):
         :return: activations
         '''
 
-        # TODO 1.b.1: YOU IMPLMENT YOUR actFun HERE
+        # TODO 1.b.1: YOU IMPLEMENT YOUR actFun HERE
+        if type == 'tanh':
+            return np.tanh(z)
+        elif type == 'sigmoid':
+            return 1 / (1 + np.exp(-z))
+        elif type == 'relu':
+            return np.maximum(0, z)
+        else:
+            print("Unknown activation function")
 
         return None
 
@@ -87,6 +95,18 @@ class NeuralNetwork(object):
         '''
 
         # TODO 1.b.3: YOU IMPLEMENT YOUR diff_actFun HERE
+        if type == 'tanh':
+            return 1 - np.tanh(z) ** 2
+        elif type == 'sigmoid':
+            sig = 1 / (1 + np.exp(-z))
+            return sig * (1 - sig)
+        elif type == 'relu':
+            dz = np.array(z, copy=True)
+            dz[z <= 0] = 0
+            dz[z > 0] = 1
+            return dz
+        else:
+            print("Unknown activation function")
 
         return None
 
@@ -100,10 +120,12 @@ class NeuralNetwork(object):
         '''
 
         # TODO: 1.c.1 YOU IMPLEMENT YOUR feedforward HERE
+        # Layer 1
+        self.z1 = X.dot(self.W1) + self.b1
+        self.a1 = actFun(self.z1)
+        # Layer 2
+        self.z2 = self.a1.dot(self.W2) + self.b2
 
-        # self.z1 =
-        # self.a1 =
-        # self.z2 =
         exp_scores = np.exp(self.z2)
         self.probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
         return None
@@ -120,8 +142,8 @@ class NeuralNetwork(object):
         # Calculating the loss
 
         # TODO: 1.c.2 YOU IMPLEMENT YOUR CALCULATION OF THE LOSS HERE
-
-        # data_loss =
+        correct_logprobs = -np.log(self.probs[range(num_examples), y])
+        data_loss = np.sum(correct_logprobs)
 
         # Add regulatization term to loss (optional)
         data_loss += self.reg_lambda / 2 * (np.sum(np.square(self.W1)) + np.sum(np.square(self.W2)))
@@ -146,12 +168,20 @@ class NeuralNetwork(object):
 
         # TODO: 1.d.2 IMPLEMENT YOUR BACKPROP HERE
         num_examples = len(X)
-        delta3 = self.probs
+        delta3 = self.probs.copy()
         delta3[range(num_examples), y] -= 1
-        # dW2 = dL/dW2
-        # db2 = dL/db2
-        # dW1 = dL/dW1
-        # db1 = dL/db1
+        delta3 /= num_examples
+
+        # Calculate gradients for W2 and b2
+        dW2 = (self.a1.T).dot(delta3)
+        db2 = np.sum(delta3, axis=0, keepdims=True)
+
+        delta2 = delta3.dot(self.W2.T) * self.diff_actFun(self.z1, self.actFun_type)
+
+        # Calculate gradients for W1 and b1
+        dW1 = np.dot(X.T, delta2)
+        db1 = np.sum(delta2, axis=0, keepdims=True)
+
         return dW1, dW2, db1, db2
 
     def fit_model(self, X, y, epsilon=0.01, num_passes=20000, print_loss=True):
@@ -197,12 +227,24 @@ class NeuralNetwork(object):
 def main():
     # # generate and visualize Make-Moons dataset
     X, y = generate_data()
-    plt.scatter(X[:, 0], X[:, 1], s=40, c=y, cmap=plt.cm.Spectral)
-    plt.show()
+    # plt.scatter(X[:, 0], X[:, 1], s=40, c=y, cmap=plt.cm.Spectral)
+    # plt.show()
 
     # model = NeuralNetwork(nn_input_dim=2, nn_hidden_dim=3 , nn_output_dim=2, actFun_type='tanh')
     # model.fit_model(X,y)
     # model.visualize_decision_boundary(X,y)
+
+    # Train the network using different activation functions.
+    # for actFun_type in ['tanh', 'sigmoid', 'relu']:
+    #     model = NeuralNetwork(nn_input_dim=2, nn_hidden_dim=3 , nn_output_dim=2, actFun_type=actFun_type)
+    #     model.fit_model(X,y)
+    #     model.visualize_decision_boundary(X,y)
+
+    # Train the network using different number of hidden units.
+    for hidden_units in [3, 5, 10, 20, 50, 100]:
+        model = NeuralNetwork(nn_input_dim=2, nn_hidden_dim=hidden_units , nn_output_dim=2, actFun_type='tanh')
+        model.fit_model(X,y)
+        model.visualize_decision_boundary(X,y)
 
 if __name__ == "__main__":
     main()
