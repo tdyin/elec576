@@ -40,8 +40,6 @@ from torchvision import datasets, transforms
 
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
-import os
-from pathlib import Path
 
 batch_size = 64
 test_batch_size = 1000
@@ -98,31 +96,62 @@ test_loader = torch.utils.data.DataLoader(
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        # self.conv1 = [inset-code]
-        # self.conv2 = [inset-code]
-        # self.conv2_drop = [inset-code]
-        # self.fc1 = [inset-code]
-        # self.fc2 = [inset-code]
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=5)
         self.conv2_drop = nn.Dropout2d(p=0.5)
         self.fc1 = nn.Linear(1024, 1024)
         self.fc2 = nn.Linear(1024, 10)
 
-    def forward(self, x):
-        # x = [inset-code]
-        # x = [inset-code]
-        # x = [inset-code]
-        # x = [inset-code]
-        # x = [inset-code]
-        # x = [inset-code]
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        x = x.view(-1, 1024)
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, p=0.5, training=self.training)
-        x = self.fc2(x)
-        x = F.softmax(x, dim=1)
+        # For storing intermediate activations
+        self.intermediate_activations = {}
+
+    def forward(self, x, store_activations=False):
+        # Conv1 layer
+        conv1_out = self.conv1(x)
+        if store_activations:
+            self.intermediate_activations['conv1_net_input'] = conv1_out.detach()
+
+        conv1_relu = F.relu(conv1_out)
+        if store_activations:
+            self.intermediate_activations['conv1_after_relu'] = conv1_relu.detach()
+
+        conv1_pool = F.max_pool2d(conv1_relu, 2)
+        if store_activations:
+            self.intermediate_activations['conv1_after_maxpool'] = conv1_pool.detach()
+
+        # Conv2 layer
+        conv2_out = self.conv2(self.conv2_drop(conv1_pool))
+        if store_activations:
+            self.intermediate_activations['conv2_net_input'] = conv2_out.detach()
+
+        conv2_relu = F.relu(conv2_out)
+        if store_activations:
+            self.intermediate_activations['conv2_after_relu'] = conv2_relu.detach()
+
+        conv2_pool = F.max_pool2d(conv2_relu, 2)
+        if store_activations:
+            self.intermediate_activations['conv2_after_maxpool'] = conv2_pool.detach()
+
+        # Flatten
+        x = conv2_pool.view(-1, 1024)
+
+        # FC1 layer
+        fc1_out = self.fc1(x)
+        if store_activations:
+            self.intermediate_activations['fc1_net_input'] = fc1_out.detach()
+
+        fc1_relu = F.relu(fc1_out)
+        if store_activations:
+            self.intermediate_activations['fc1_after_relu'] = fc1_relu.detach()
+
+        fc1_dropout = F.dropout(fc1_relu, p=0.5, training=self.training)
+
+        # FC2 layer (output)
+        fc2_out = self.fc2(fc1_dropout)
+        if store_activations:
+            self.intermediate_activations['fc2_net_input'] = fc2_out.detach()
+
+        x = F.softmax(fc2_out, dim=1)
 
         return x
 
@@ -139,6 +168,36 @@ optimizer = optim.Adam(model.parameters(), lr=lr)
 eps = 1e-13
 
 
+def log_detailed_statistics(model, writer, iteration):
+    """Log detailed statistics for weights, biases, and activations"""
+    # Log weights and biases statistics
+    for name, param in model.named_parameters():
+        param_cpu = param.detach().cpu()
+        layer_name = name.replace('.', '/')
+
+        # Log histogram
+        writer.add_histogram(f'parameters/{layer_name}/histogram', param_cpu, iteration)
+
+        # Log scalar statistics
+        writer.add_scalar(f'parameters/{layer_name}/min', param_cpu.min().item(), iteration)
+        writer.add_scalar(f'parameters/{layer_name}/max', param_cpu.max().item(), iteration)
+        writer.add_scalar(f'parameters/{layer_name}/mean', param_cpu.mean().item(), iteration)
+        writer.add_scalar(f'parameters/{layer_name}/std', param_cpu.std().item(), iteration)
+
+    # Log activations statistics
+    for act_name, activation in model.intermediate_activations.items():
+        act_cpu = activation.cpu()
+
+        # Log histogram
+        writer.add_histogram(f'activations/{act_name}/histogram', act_cpu, iteration)
+
+        # Log scalar statistics
+        writer.add_scalar(f'activations/{act_name}/min', act_cpu.min().item(), iteration)
+        writer.add_scalar(f'activations/{act_name}/max', act_cpu.max().item(), iteration)
+        writer.add_scalar(f'activations/{act_name}/mean', act_cpu.mean().item(), iteration)
+        writer.add_scalar(f'activations/{act_name}/std', act_cpu.std().item(), iteration)
+
+
 def train(epoch):
     model.train()
 
@@ -146,35 +205,38 @@ def train(epoch):
     # criterion = [inset-code]
     criterion = nn.NLLLoss()
 
+    global_iteration = 0
+
     for batch_idx, (data, target) in enumerate(train_loader):
         if cuda:
             data, target = data.cuda(), target.cuda()
 
+        # Calculate global iteration number
+        global_iteration = (epoch - 1) * len(train_loader) + batch_idx
+
         # optimizer.[inset-code]
         optimizer.zero_grad()
-        # output = [inset-code]
-        output = model(data)
+
+        # Forward pass with activation storage every 100 iterations
+        store_activations = (global_iteration % 100 == 0)
+        output = model(data, store_activations=store_activations)
+
         loss = criterion(torch.log(output + eps), target)  # = sum_k(-t_k * log(y_k))
         # loss[inset-code]
         loss.backward()
         # optimizer[inset-code]
         optimizer.step()
 
+        # Log detailed statistics every 100 iterations
+        if global_iteration % 100 == 0:
+            log_detailed_statistics(model, writer, global_iteration)
+            print(f'[Iteration {global_iteration}] Logged detailed statistics')
+
         if batch_idx % logging_interval == 0:
             # [inset-code: print and log the performance]
             print(f'Train Epoch: {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)} '
                   f'({100. * batch_idx / len(train_loader):.0f}%)]\tLoss: {loss.item():.6f}')
-            n_iter = epoch * len(train_loader) + batch_idx
-            writer.add_scalar('train/loss', loss.item(), n_iter)
-
-    # Log model parameters to TensorBoard at every epoch
-    for name, param in model.named_parameters():
-        layer, attr = os.path.splitext(name)
-        attr = attr[1:]
-        writer.add_histogram(
-            f'{layer}/{attr}',
-            param.clone().cpu().data.numpy(),
-            n_iter)
+            writer.add_scalar('train/loss', loss.item(), global_iteration)
 
 
 def test(epoch):
